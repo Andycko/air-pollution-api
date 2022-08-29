@@ -1,6 +1,7 @@
 import { BaseCommand, args } from '@adonisjs/core/build/standalone'
 import Place from 'App/Models/Place'
 import Record from 'App/Models/Record'
+import OpenweathermapService from 'App/Services/OpenweathermapService'
 
 export default class DataSync extends BaseCommand {
   /**
@@ -42,9 +43,6 @@ export default class DataSync extends BaseCommand {
   }
 
   public async run() {
-    // Import axios for fetching data
-    const { default: axios } = await import('axios')
-
     // Declare some consts
     const DAY = 1000 * 60 * 60 * 24
 
@@ -55,16 +53,13 @@ export default class DataSync extends BaseCommand {
     this.logger.info(`You are syncing data for ${this.city} - ${from} -> ${to}...`)
 
     // Fetch city coordinates from Openweathermap API
+    const cityData = await OpenweathermapService.getCityCoords(this.city)
 
-    const cityResponse = await axios.get(
-      `http://api.openweathermap.org/geo/1.0/direct?q=${this.city}&limit=1&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-    )
-
-    if (!cityResponse.data || cityResponse.data.length === 0) {
+    if (!cityData) {
       this.logger.error('Could not find city.')
       return 1
     }
-    const { lat, lon } = cityResponse.data[0]
+    const { lat, lon } = cityData
     this.logger.info(`Found coordinates for ${this.city}: ${lat} ${lon}.`)
 
     // Check if city exists in database
@@ -102,28 +97,17 @@ export default class DataSync extends BaseCommand {
     )
   }
 
-  private async fetchAndSavePollutionData(
-    place: Place,
-    from: Date,
-    to: Date
-  ): Promise<void> {  
-    // Import axios for fetching data
-    const { default: axios } = await import('axios')
-
+  private async fetchAndSavePollutionData(place: Place, from: Date, to: Date): Promise<void> {
     this.logger.info(`Fetching batch data for ${from} -> ${to}...`)
 
-    const response = await axios.get(
-      `http://api.openweathermap.org/data/2.5/air_pollution/history?lat=${place.lat}&lon=${
-        place.lon
-      }&start=${from.getTime()}&end=${to.getTime()}&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-    )
+    const response = await OpenweathermapService.getPollutionData(place, from, to)
 
-    if (!response.data) {
+    if (!response) {
       this.logger.error('Could not fetch pollution data. Skipping to next one.')
       return
     }
 
-    if (response.data.list.length === 0) {
+    if (response.list.length === 0) {
       this.logger.error(
         'Could not find any pollution data for that time period. Skipping to next one.'
       )
@@ -133,7 +117,7 @@ export default class DataSync extends BaseCommand {
     this.logger.success(`Fetched polution data.`)
 
     // create record for each object in res
-    for (let element of response.data.list) {
+    for (let element of response.list) {
       const record: Partial<Record> = {
         dt: new Date(element.dt),
         place_id: place!.id,
@@ -148,10 +132,10 @@ export default class DataSync extends BaseCommand {
         nh_3: element.components.nh3,
       }
       try {
-        await Record.firstOrCreate({ dt: new Date(element.dt), place_id: place!.id }, record)    
+        await Record.firstOrCreate({ dt: new Date(element.dt), place_id: place!.id }, record)
       } catch (error) {
         this.logger.debug(error.message)
-        this.logger.error("Could not save record to database. Skipping to next one.")
+        this.logger.error('Could not save record to database. Skipping to next one.')
       }
     }
   }

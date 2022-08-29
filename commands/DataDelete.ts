@@ -1,6 +1,7 @@
 import { BaseCommand, args } from '@adonisjs/core/build/standalone'
 // Import DB models
 import Place from 'App/Models/Place'
+import OpenweathermapService from 'App/Services/OpenweathermapService'
 
 export default class DataDelete extends BaseCommand {
   /**
@@ -36,20 +37,16 @@ export default class DataDelete extends BaseCommand {
   }
 
   public async run() {
-    // Import axios for fetching data
-    const { default: axios } = await import('axios')
-
     this.logger.info(`You are deleting data for ${this.city}...`)
 
     // Fetch city coordinates from Openweathermap API
-    const cityResponse = await axios.get(
-      `http://api.openweathermap.org/geo/1.0/direct?q=${this.city}&limit=1&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-    )
-    if (!cityResponse.data) {
+    const cityData = await OpenweathermapService.getCityCoords(this.city)
+
+    if (!cityData) {
       this.logger.error('Could not find city.')
       return 1
     }
-    const { lat, lon } = cityResponse.data[0]
+    const { lat, lon } = cityData
 
     // Delete all places for the city
     const city = await Place.query().where('lat', lat).where('lon', lon).delete()

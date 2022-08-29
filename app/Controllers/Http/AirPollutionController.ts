@@ -2,6 +2,7 @@ import type { HttpContextContract } from '@ioc:Adonis/Core/HttpContext'
 import Place from 'App/Models/Place'
 import Record from 'App/Models/Record'
 import axios from 'axios'
+import OpenweathermapService from 'App/Services/OpenweathermapService'
 
 export default class AirPolutionController {
   public async avg({ request, response }: HttpContextContract) {
@@ -19,17 +20,15 @@ export default class AirPolutionController {
     from = new Date(from)
     to = new Date(to)
 
-    // retrieve the city coordinates from the database
-    const cityResponse = await axios.get(
-      `http://api.openweathermap.org/geo/1.0/direct?q=${city}&limit=1&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-    )
+    // Fetch city coordinates from Openweathermap API
+    const cityData = await OpenweathermapService.getCityCoords(city)
 
-    if (!cityResponse.data || cityResponse.data.length === 0)
+    if (!cityData)
       return response.status(404).json({
         error: 'Could not find city coordinates.',
       })
 
-    const { lat, lon } = cityResponse.data[0]
+    const { lat, lon } = cityData
 
     // Check if city exists in database
     const place = await Place.query().where({ lat, lon }).first()
@@ -105,21 +104,21 @@ export default class AirPolutionController {
         error: `Could not find data between ${from} and ${to}.`,
       })
 
-    const city = await axios.get(
-      `http://api.openweathermap.org/geo/1.0/reverse?lat=${pollutionData.lat}&lon=${pollutionData.lon}&limit=1&appid=${process.env.OPENWEATHERMAP_API_KEY}`
-    )
-    if (!city.data || city.data.length === 0)
+    const cityName = await OpenweathermapService.getCityName({
+      lat: pollutionData.lat,
+      lon: pollutionData.lon,
+    })
+
+    if (!cityName)
       return response.status(500).json({
         error: 'Server Error. Could not find city name.',
       })
-
-    const { name } = city.data[0]
 
     delete pollutionData.lat
     delete pollutionData.lon
 
     return {
-      city: name,
+      city: cityName,
       pollutionData: pollutionData,
     }
   }
