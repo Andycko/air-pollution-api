@@ -117,6 +117,7 @@ export default class DataSync extends BaseCommand {
     this.logger.success(`Fetched polution data.`)
 
     // create record for each object in res
+    let promises: any = []
     for (let element of response.list) {
       const record: Partial<Record> = {
         dt: new Date(element.dt),
@@ -131,12 +132,13 @@ export default class DataSync extends BaseCommand {
         pm_10: element.components.pm10,
         nh_3: element.components.nh3,
       }
-      try {
-        await Record.firstOrCreate({ dt: new Date(element.dt), place_id: place!.id }, record)
-      } catch (error) {
-        this.logger.debug(error.message)
-        this.logger.error('Could not save record to database. Skipping to next one.')
-      }
+      promises.push(Record.firstOrCreate({ dt: new Date(element.dt), place_id: place!.id }, record))
+    }
+    try {
+      await Promise.all(promises)
+    } catch (error) {
+      this.logger.debug(error.message)
+      this.logger.error('Could not save record to database. Skipping to next one.')
     }
   }
 }
