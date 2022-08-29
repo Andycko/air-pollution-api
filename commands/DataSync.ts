@@ -114,8 +114,6 @@ export default class DataSync extends BaseCommand {
       return
     }
 
-    this.logger.success(`Fetched polution data.`)
-
     // create record for each object in res
     let promises: any = []
     for (let element of response.list) {
@@ -140,5 +138,33 @@ export default class DataSync extends BaseCommand {
       this.logger.debug(error.message)
       this.logger.error('Could not save record to database. Skipping to next one.')
     }
+
+    /**
+     * This is the alternative with fetchOrCreateMany, however, it is slower
+     *
+     *     // create record for each object in res
+     *     const records = response.list.map((element) => {
+     *       return {
+     *         dt: new Date(element.dt),
+     *         place_id: place!.id,
+     *         aqi: element.main.aqi,
+     *         co: element.components.co,
+     *         no: element.components.no,
+     *         no_2: element.components.no2,
+     *         o_3: element.components.o3,
+     *         so_2: element.components.so2,
+     *         pm_2_5: element.components.pm2_5,
+     *         pm_10: element.components.pm10,
+     *         nh_3: element.components.nh3,
+     *       } as Partial<Record>
+     *     })
+     *
+     *     try {
+     *       await Record.fetchOrCreateMany(['dt', 'place_id'], records)
+     *     } catch (error) {
+     *       this.logger.debug(error.message)
+     *       this.logger.error('Could not save record to database. Skipping to next one.')
+     *     }
+     */
   }
 }
